@@ -7,7 +7,9 @@ use App\Model\PortMap;
 use App\Model\WebMap;
 use Channel\Client as ChannelClient;
 use core\interfaces\WorkerInterface;
+use Workerman\Events\EventInterface;
 use Workerman\Lib\Timer;
+use Workerman\Worker;
 
 class Server extends WorkerWithCallback implements WorkerInterface
 {
@@ -22,27 +24,12 @@ class Server extends WorkerWithCallback implements WorkerInterface
     {
         parent::__construct($socket_name, $context_option);
     }
-
     function onMessage($connection, $data)
     {
         $connection->lastMsgTime = time();
         if ($connection->isWeb) {
-            $connection->data .= $data;
-            preg_match("/Content-Length:\s*\d*/i", $connection->data, $paramsLength);
-            $headerEnd = \strpos($connection->data, "\r\n\r\n");
-            $headerLength = strlen(substr($connection->data, 0, $headerEnd));
-            if (!empty($paramsLength)) {
-                $connection->totalContentLength = (int)str_replace("Content-Length: ", '', $paramsLength[0]);
-                echo "总的数据包长度：{ $connection->totalContentLength }";
-                $connection->receveContentLength += strlen($data);
-                echo "接收到的数据包长度： " . ($connection->receveContentLength - $headerLength - 4);
-                if ($connection->totalContentLength > $connection->receveContentLength) {
-                    echo "\r\n数据包不完整，继续接受数据";
-                    return;
-                }
-            }
-            $data = $connection->data;
-            preg_match("/Host:\s.*/i", serialize($connection->data), $match);
+            $data = $data->rawBuffer();
+            preg_match("/Host:\s.*/i", serialize($data), $match);
             if (empty($match)) {
                 $connection->close();
                 return;
@@ -57,8 +44,12 @@ class Server extends WorkerWithCallback implements WorkerInterface
                     $user->notFrozen();
                 })
                 ->where('domain', $domain[1])
-                ->select('domain', 'local_ip', 'local_port', 'client_id')
+                ->select('domain', 'local_ip', 'local_port', 'client_id', 'protocol')
                 ->first();
+            if ($mapInfo->protocol == 'https' && $this->transport != "ssl") {
+                $connection->close();
+                return;
+            }
             // 如果存在web映射，获取数据传输通道
             if ($mapInfo && isset(self::$inClientList[$mapInfo->client->data_bus])) {
                 $this->setInMsgListen($connection, $mapInfo);
@@ -76,10 +67,6 @@ class Server extends WorkerWithCallback implements WorkerInterface
         $send['map_info'] = $connection->mapInfo;
         $send['channel'] = $connection->channel;
         ChannelClient::publish("EV_OUT_MSG" . $connection->dataBus, $send);
-
-        $connection->receveContentLength = 0;
-        $connection->totalContentLength = 0;
-        $connection->data = "";
     }
 
     private function setInMsgListen(&$connection, $mapInfo)
@@ -117,19 +104,22 @@ class Server extends WorkerWithCallback implements WorkerInterface
     function onConnect($connection)
     {
         echo "外部连接进来";
-
         $connection->maxSendBufferSize = 50 * 1024 * 1024;
         $connection->maxPackageSize = 50 * 1024 * 1024;
-        $connection->isWeb = false;
         $connection->uniqid = uniqid() . rand(100, 999);
 
         $remotePort = $connection->getLocalPort();
+
         if ($remotePort == env("HTTP_MAP_SERVER_PORT") || $remotePort == env("HTTPS_MAP_SERVER_PORT")) {
             $connection->isWeb = true;
-            $connection->receveContentLength = 0; // tcp会分包
-            $connection->totalContentLength = 0; // tcp会分包
-            $connection->data = "";
+            if ($remotePort == env("HTTPS_MAP_SERVER_PORT")) {
+                $connection->isHttps = true;
+            } else {
+                $connection->isHttps = false;
+            }
             return;
+        } else {
+            $connection->isWeb = false;
         }
 
         $mapInfo = PortMap::where('remote_port', $remotePort)->select('local_ip', 'local_port', 'client_id')->first();
