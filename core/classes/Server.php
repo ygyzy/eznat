@@ -29,19 +29,12 @@ class Server extends WorkerWithCallback implements WorkerInterface
             }
             $domain = explode(':', preg_replace("/(\n)|(\s)|(\t)|(\')|(')|(，)/", '', $match[0]));
             global $webMap;
-            $webMapExists = '';
             foreach ($webMap as $web) {
                 if ($web['domain'] == $domain[1]) {
                     $this->setInMsgListen($connection, $web);
                     $connectData = $this->getSendData($connection,  $connection->mapInfo);
                     ChannelClient::publish(EVENT_OUT_CONNECT . $connection->dataBus, $connectData);
-                    $webMap = true;
-                    break;
                 }
-            }
-            if ($webMapExists) {
-                $connection->close();
-                return;
             }
         }
         $send = $this->getSendData($connection, $connection->mapInfo, $data);

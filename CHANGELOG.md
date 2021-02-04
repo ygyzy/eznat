@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 + WS协议支持，对应的 WSS 也应该支持
 + 增加真正可独立运行的php环境。
 
+## 2020/02/04 10:10 周四 v4.0.2
+### Fixed
++ 网站穿透错误，只能进入主页，界面错乱
+
 ## 2020/12/31 14:14 周四 v4.0.1
 ### Fixed
 + 修复配置文件读取路径错误
