@@ -3,7 +3,7 @@
 **兄弟别只顾着fork代码，给个star先。**
 
 ### 立即体验穿透效果
-[作者线上经营，注册送200M体验流量，点击前往](http://nwct.istiny.cc)
+[作者线上经营，注册送200M体验流量，点击前往](http://eznat.istiny.cc)
 
 ### 如何使用
 [使用手册](https://gitee.com/FYDEV/eznat_server/wikis/pages)
